@@ -53,7 +53,7 @@ namespace LoadFoxProDBToSQL
             Stopwatch stopwatch = new Stopwatch();
             Stopwatch stopwatch2 = new Stopwatch();
             stopwatch.Start();
-            lbMessages.Items.Add(@"Processing started at {DateTime.Now}");
+            lbMessages.Items.Add($"Processing started at {DateTime.Now}");
             var masterConnString = $"Server = {sqlServerName.Text}; Database = master; User Id ={sqlUserName.Text}; Password ={sqlPassword.Text};";
             _masterConnString = masterConnString;
             _newConnString = $"Server ={sqlServerName.Text}; Database = {newSQLDBName.Text}; User Id ={sqlUserName.Text}; Password ={sqlPassword.Text};";
@@ -142,7 +142,7 @@ namespace LoadFoxProDBToSQL
 
         private void CreateSqlServerTable(DataTable dataTable, string connString, string tableName)
         {
-            lbMessages.Items.Add("Create table Started for Table: {dataTable.TableName}");
+            lbMessages.Items.Add($"Create table Started for Table: {dataTable.TableName}");
             SqlConnection conn = new SqlConnection();
             conn.ConnectionString = connString;
             conn.Open();
