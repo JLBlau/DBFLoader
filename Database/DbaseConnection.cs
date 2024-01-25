@@ -15,6 +15,11 @@ namespace LoadFoxProDBToSQL.Database
             throw new NotImplementedException();
         }
 
+        public void CreateTable(string tableName)
+        {
+            throw new NotImplementedException();
+        }
+
         public DataTable GetSchema(string schemaName)
         {
             throw new NotImplementedException();

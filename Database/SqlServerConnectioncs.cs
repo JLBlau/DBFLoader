@@ -47,6 +47,11 @@ namespace LoadFoxProDBToSQL
             return connection;
         }
 
+        public DatabaseConnection Connect(string connectionString, ILogger logger)
+        {
+            throw new NotImplementedException();
+        }
+
         public void CreateDatabase(string databaseName)
         {
             _connection.Open();
@@ -64,9 +69,27 @@ namespace LoadFoxProDBToSQL
             }
         }
 
-        public DataTable GetSchema(string? schemaName = 'dbo')
+        public void CreateTable(string tableName)
         {
+            throw new NotImplementedException();
+        }
 
+        public void Dispose()
+        {
+            throw new NotImplementedException();
+        }
+
+        public DataTable GetSchema(string schemaName = "dbo")
+        {
+            DataTable dataTable = null;
+            try
+            {
+               dataTable =  _connection.GetSchema(schemaName);
+            }
+            catch(Exception ex) 
+            {
+                _logger.Error(ex, $"Error occurred in {this.GetType().Name}.GetSchema");
+            }
         }
 
 

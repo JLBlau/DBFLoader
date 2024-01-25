@@ -43,7 +43,7 @@ namespace LoadFoxProDBToSQL.Database
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, $"Error occurred in GetSchema()");
+                _logger.Error(ex, $"Error occurred in {this.GetType().Name}.GetSchema");
             }
             return dataTable;
         }
