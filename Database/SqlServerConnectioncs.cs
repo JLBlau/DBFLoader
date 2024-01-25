@@ -65,7 +65,7 @@ namespace LoadFoxProDBToSQL
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, $"ERROR! occurred creating new DB {databaseName.Text}. Ex:{ex.Message}" + Environment.NewLine);
+                _logger.Error(ex, $"ERROR! occurred creating new DB {databaseName}. Ex:{ex.Message}" + Environment.NewLine);
             }
         }
 
@@ -90,6 +90,7 @@ namespace LoadFoxProDBToSQL
             {
                 _logger.Error(ex, $"Error occurred in {this.GetType().Name}.GetSchema");
             }
+            return dataTable;
         }
 
 
