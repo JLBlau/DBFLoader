@@ -636,7 +636,7 @@ namespace LoadFoxProDBToSQL
             return sqlColumnCreate;
         }
 
-          private static string BuildSelectStatement(DataTable dataTable, string tableName)
+        private static string BuildSelectStatement(DataTable dataTable, string tableName)
         {
 
             int i = 1;
@@ -670,7 +670,6 @@ namespace LoadFoxProDBToSQL
             }
             return sqlSelect;
         }
-
 
         private static string GetDataType(string dataType, string maxLength, string precision = "0", int scale = 0)
         {
