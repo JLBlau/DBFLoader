@@ -11,11 +11,20 @@ namespace LoadFoxProDBToSQL
     public interface IDatabaseConnection
     {
 
-        DatabaseConnection Connect(string connectionString, ILogger logger);
+        //DatabaseConnection Connect();
 
-        DataTable GetSchema(string schemaName);
+        bool? CreateDatabase(string databaseName);
 
-        void CreateTable(string tableName);
+        DataTable GetSchema(string schemaName = "");
+
+        void CreateTable(DataTable dataTable, string tableName, bool replaceSpaces = true);
+
+
+        string BuildCreateStatement(DataTable dataTable,  string tableName, bool replaceSpaces);
+
+        string GetDataType(string dataTypeName, string maxLength, string precicion, int scale);
+
+        string InsertData (IDataReader dataReader, DataTable columns, string tableName);
 
     }
 }

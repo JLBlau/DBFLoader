@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Data;
 using System.Data.Common;
 using System.Data.OleDb;
@@ -15,8 +14,9 @@ using System.Linq.Expressions;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using LoadFoxProDBToSQL.Database;
 using Npgsql;
-using NpgsqlTypes;
+using Serilog;
 using Z.BulkOperations;
 
 namespace LoadFoxProDBToSQL
@@ -24,8 +24,6 @@ namespace LoadFoxProDBToSQL
     public partial class Form1 : Form
     {
         string _path;
-        //NpgsqlConnection _pgsqlConnection;
-        //SqlConnection _sqlConnection;
         DbConnection _masterdbConnection;
         DbConnection _dbConnection;
         OleDbConnection _sourceConnection;
@@ -95,6 +93,12 @@ namespace LoadFoxProDBToSQL
             var stopwatch = new Stopwatch();
             Stopwatch stopwatch2 = new Stopwatch();
             stopwatch.Start();
+            ILogger logger = new LoggerConfiguration()
+                            .WriteTo
+                            .Console()
+                             .WriteTo.Logger(lc => lc
+                                .WriteTo.File("log.txt"))
+                            .CreateLogger();
             _messageBuilder = new StringBuilder();
             _messageBuilder.Append($"Processing started at {DateTime.Now}" + Environment.NewLine);
             messageBox.Text = _messageBuilder.ToString();
@@ -123,13 +127,22 @@ namespace LoadFoxProDBToSQL
             else
                 throw new NotImplementedException();
 
+            IDatabaseConnection destinationConnection;
             bool sqlSuccess;
             if (serverButton1.Checked)
-                sqlSuccess = ConnectAndCreateSQLDB(_masterConnString);
+            {
+                destinationConnection = new SqlServerConnection(_masterConnString, logger);
+                sqlSuccess = (bool)destinationConnection.CreateDatabase("newDatabseName");
+            }
             else
-                sqlSuccess = ConnectAndCreatePostgresDB(_masterConnString);
+            {
+                destinationConnection = new PostgresConnection(_masterConnString, logger); ;
+                sqlSuccess = (bool)destinationConnection.CreateDatabase("newPostGresDBName");
+            }
 
-            var tableList = GetSourceDBTableList();
+            //TODO move this to Dbaseconnection.GetSchema/FoxProConnection.GetSchema
+            IDatabaseConnection connection = new DbaseConnection(_sourceConnString, logger);
+            var tableList = connection.GetSchema();
 
             foreach (var t in tableList.AsEnumerable())
             {
@@ -154,7 +167,7 @@ namespace LoadFoxProDBToSQL
 
                         if (_isPostgres)
                         {
-                            CreatePostgresDestinationTable(columns, _newConnString, tableName);
+                            (columns, _newConnString, tableName);
                             InsertData(dataReader, columns, _newConnString, tableName);
                         }
                         else if (_isSqlServer)
@@ -193,273 +206,273 @@ namespace LoadFoxProDBToSQL
                 return new SqlConnection(connString);
         }
 
-        private bool ConnectAndCreateSQLDB(string connString)
-        {
-            bool success = false;
-            //connect to SQL First
-            SqlConnection sqlConn = (SqlConnection)GetDbConnection(connString);
-            _masterdbConnection = sqlConn;
-            try
-            {
-                sqlConn.Open();
+        //private bool ConnectAndCreateSQLDB(string connString)
+        //{
+        //    bool success = false;
+        //    //connect to SQL First
+        //    SqlConnection sqlConn = (SqlConnection)GetDbConnection(connString);
+        //    _masterdbConnection = sqlConn;
+        //    try
+        //    {
+        //        sqlConn.Open();
 
-            }
-            catch (Exception ex)
-            {
-                _messageBuilder.Append($"Cannot open connection to {serverName.Text}. Ex: {ex.Message}" + Environment.NewLine);
-                messageBox.Text = _messageBuilder.ToString();
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _messageBuilder.Append($"Cannot open connection to {serverName.Text}. Ex: {ex.Message}" + Environment.NewLine);
+        //        messageBox.Text = _messageBuilder.ToString();
                 
                 
-            }
-            try
-            {
-                //Create the DB to house the DB data
-                SqlCommand sqlCreateTableCmd = new SqlCommand($"CREATE DATABASE {newSQLDBName.Text.Trim()}", sqlConn);
-                sqlCreateTableCmd.ExecuteNonQuery();
-                success = true;
-            }
-            catch (Exception ex)
-            {
-                //lbMessages.Items.Add($"ERROR! occurred creating new DB {newSQLDBName.Text}. Ex:{ex.Message}");
-                _messageBuilder.Append($"ERROR! occurred creating new DB {newSQLDBName.Text}. Ex:{ex.Message}" + Environment.NewLine);
-                messageBox.Text = _messageBuilder.ToString();
-            }
-            sqlConn.Close();
-            _newConnString = $"Server ={serverName.Text}; Database = {newSQLDBName.Text}; User Id ={sqlUserName.Text}; Password ={sqlPassword.Text};";
-            sqlConn.ConnectionString = _newConnString;
-            //make sure we can connect to the new db
-            sqlConn.Open();
-            _dbConnection = sqlConn;
-            sqlConn.Close();
+        //    }
+        //    try
+        //    {
+        //        //Create the DB to house the DB data
+        //        SqlCommand sqlCreateTableCmd = new SqlCommand($"CREATE DATABASE {newSQLDBName.Text.Trim()}", sqlConn);
+        //        sqlCreateTableCmd.ExecuteNonQuery();
+        //        success = true;
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        //lbMessages.Items.Add($"ERROR! occurred creating new DB {newSQLDBName.Text}. Ex:{ex.Message}");
+        //        _messageBuilder.Append($"ERROR! occurred creating new DB {newSQLDBName.Text}. Ex:{ex.Message}" + Environment.NewLine);
+        //        messageBox.Text = _messageBuilder.ToString();
+        //    }
+        //    sqlConn.Close();
+        //    _newConnString = $"Server ={serverName.Text}; Database = {newSQLDBName.Text}; User Id ={sqlUserName.Text}; Password ={sqlPassword.Text};";
+        //    sqlConn.ConnectionString = _newConnString;
+        //    //make sure we can connect to the new db
+        //    sqlConn.Open();
+        //    _dbConnection = sqlConn;
+        //    sqlConn.Close();
 
-            return success;
-        }
+        //    return success;
+        //}
 
-        private bool ConnectAndCreatePostgresDB(string connString)
-        {
-            bool success = false;
-            //connect to SQL First
+        //private bool ConnectAndCreatePostgresDB(string connString)
+        //{
+        //    bool success = false;
+        //    //connect to SQL First
 
-            NpgsqlConnection connection = (NpgsqlConnection)GetDbConnection(connString);
-                //new Npgsql.NpgsqlConnection(connString);
-            _masterdbConnection = connection;
-            try
-            {
-                connection.Open();
+        //    NpgsqlConnection connection = (NpgsqlConnection)GetDbConnection(connString);
+        //        //new Npgsql.NpgsqlConnection(connString);
+        //    _masterdbConnection = connection;
+        //    try
+        //    {
+        //        connection.Open();
 
-            }
-            catch (Exception ex)
-            {
-                _messageBuilder.Append($"Cannot open connection to {serverName.Text}. Ex: {ex.Message}" + Environment.NewLine);
-                messageBox.Text = _messageBuilder.ToString();
-            }
-            try
-            {
-                //Create the DB to house the DB data
-                NpgsqlCommand sqlCreateTableCmd = new NpgsqlCommand($"CREATE DATABASE \"{newSQLDBName.Text.Trim()}\";", connection);
-                sqlCreateTableCmd.ExecuteNonQuery();
-                success = true;
-            }
-            catch (Exception ex)
-            {
-                _messageBuilder.Append($"Error occurred creating new DB {newSQLDBName.Text}. Ex:{ex.Message}" + Environment.NewLine);
-                messageBox.Text = _messageBuilder.ToString();
-            }
-            connection.Close();
-            _newConnString = $"Server ={serverName.Text}; Database = {newSQLDBName.Text}; User Id ={sqlUserName.Text}; Password ={sqlPassword.Text};Ssl Mode=Require;";
-            connection.ConnectionString = _newConnString;
-            //make sure we can connect to the new db
-            connection.Open();
-            _dbConnection = connection;
-            connection.Close();
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _messageBuilder.Append($"Cannot open connection to {serverName.Text}. Ex: {ex.Message}" + Environment.NewLine);
+        //        messageBox.Text = _messageBuilder.ToString();
+        //    }
+        //    try
+        //    {
+        //        //Create the DB to house the DB data
+        //        NpgsqlCommand sqlCreateTableCmd = new NpgsqlCommand($"CREATE DATABASE \"{newSQLDBName.Text.Trim()}\";", connection);
+        //        sqlCreateTableCmd.ExecuteNonQuery();
+        //        success = true;
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _messageBuilder.Append($"Error occurred creating new DB {newSQLDBName.Text}. Ex:{ex.Message}" + Environment.NewLine);
+        //        messageBox.Text = _messageBuilder.ToString();
+        //    }
+        //    connection.Close();
+        //    _newConnString = $"Server ={serverName.Text}; Database = {newSQLDBName.Text}; User Id ={sqlUserName.Text}; Password ={sqlPassword.Text};Ssl Mode=Require;";
+        //    connection.ConnectionString = _newConnString;
+        //    //make sure we can connect to the new db
+        //    connection.Open();
+        //    _dbConnection = connection;
+        //    connection.Close();
 
-            return success;
-        }
+        //    return success;
+        //}
 
-        private DataTable GetSourceDBTableList()
-        {
-            OleDbConnection tableConn = new OleDbConnection(_sourceConnString);
+        //private DataTable GetSourceDBTableList()
+        //{
+        //    OleDbConnection tableConn = new OleDbConnection(_sourceConnString);
             
-            tableConn.Open();
-            DataTable tables = new DataTable();
-            tables = tableConn.GetSchema("Tables");
-            tableConn.Close();
-            tableConn.Dispose();
+        //    tableConn.Open();
+        //    DataTable tables = new DataTable();
+        //    tables = tableConn.GetSchema("Tables");
+        //    tableConn.Close();
+        //    tableConn.Dispose();
 
-            return tables;
+        //    return tables;
             
-        }
+        //}
 
-        private void CreatePostgresDestinationTable(DataTable columnsDataTable, string connString, string tableName)
-        {
+        //private void CreatePostgresDestinationTable(DataTable columnsDataTable, string connString, string tableName)
+        //{
             
-            _messageBuilder.Append($"Create table Started for Table: {tableName}" + Environment.NewLine);
-            messageBox.Text = _messageBuilder.ToString();
-            NpgsqlConnection conn = new NpgsqlConnection();
-            conn.ConnectionString = connString;
-            using (conn)
-            {
-                if(conn.State != ConnectionState.Open)
-                {
-                    conn.Close();
-                    conn = new NpgsqlConnection();
-                    conn.ConnectionString = connString;
-                }
-                conn.Open();
-                string createSql = "";
-                try
-                {
-                    using (conn)
-                    {
-                        createSql = BuildPostgresCreateStatement(columnsDataTable, tableName);
-                        NpgsqlCommand createCmd = conn.CreateCommand();
-                        createCmd.CommandText = createSql;
-                        createCmd.ExecuteNonQuery();
-                    }
-                }
-                catch (SqlException ex)
-                {
-                    //lbMessages.Items.Add("Sql Exception:" + ex.Message + ", Stack Trace:" + ex.StackTrace + " for tablename: " + tableName + " sql statement " + createSql);
-                    _messageBuilder.Append("Sql Exception:" + ex.Message + ", Stack Trace:" + ex.StackTrace + " for tablename: " + tableName + " sql statement " + createSql + Environment.NewLine);
-                    messageBox.Text = _messageBuilder.ToString();
-                }
-                catch (Exception ex2)
-                {
-                    _messageBuilder.Append("Create Table Error:" + ex2.Message + ", Stack Trace:" + ex2.StackTrace + " for tablename: " + tableName + " sql statement " + createSql + Environment.NewLine);
-                    messageBox.Text = _messageBuilder.ToString();
-                }
-                conn.Close();
-            }
-            _messageBuilder.Append($"Table {tableName} created successfully." + Environment.NewLine);
-            messageBox.Text = _messageBuilder.ToString();
-        }
+        //    _messageBuilder.Append($"Create table Started for Table: {tableName}" + Environment.NewLine);
+        //    messageBox.Text = _messageBuilder.ToString();
+        //    NpgsqlConnection conn = new NpgsqlConnection();
+        //    conn.ConnectionString = connString;
+        //    using (conn)
+        //    {
+        //        if(conn.State != ConnectionState.Open)
+        //        {
+        //            conn.Close();
+        //            conn = new NpgsqlConnection();
+        //            conn.ConnectionString = connString;
+        //        }
+        //        conn.Open();
+        //        string createSql = "";
+        //        try
+        //        {
+        //            using (conn)
+        //            {
+        //                createSql = BuildPostgresCreateStatement(columnsDataTable, tableName);
+        //                NpgsqlCommand createCmd = conn.CreateCommand();
+        //                createCmd.CommandText = createSql;
+        //                createCmd.ExecuteNonQuery();
+        //            }
+        //        }
+        //        catch (SqlException ex)
+        //        {
+        //            //lbMessages.Items.Add("Sql Exception:" + ex.Message + ", Stack Trace:" + ex.StackTrace + " for tablename: " + tableName + " sql statement " + createSql);
+        //            _messageBuilder.Append("Sql Exception:" + ex.Message + ", Stack Trace:" + ex.StackTrace + " for tablename: " + tableName + " sql statement " + createSql + Environment.NewLine);
+        //            messageBox.Text = _messageBuilder.ToString();
+        //        }
+        //        catch (Exception ex2)
+        //        {
+        //            _messageBuilder.Append("Create Table Error:" + ex2.Message + ", Stack Trace:" + ex2.StackTrace + " for tablename: " + tableName + " sql statement " + createSql + Environment.NewLine);
+        //            messageBox.Text = _messageBuilder.ToString();
+        //        }
+        //        conn.Close();
+        //    }
+        //    _messageBuilder.Append($"Table {tableName} created successfully." + Environment.NewLine);
+        //    messageBox.Text = _messageBuilder.ToString();
+        //}
 
-        private void CreateSqlServerDestinationTable(DataTable dataTable, string connString, string tableName)
-        {
-            var conn = _dbConnection;
-            //lbMessages.Items.Add("Create table Started for Table: {dataTable.TableName}");
-            _messageBuilder.Append($"Create table Started for Table: {tableName}" + Environment.NewLine);
-            messageBox.Text = _messageBuilder.ToString();
-            if (conn.State != ConnectionState.Open)
-            {
-                conn.ConnectionString =_newConnString;
-                conn.Open();
-            }
-            string createSql = "";
-            try
-            {
-                using (_dbConnection)
-                {
-                    createSql = BuildSqlServerCreateStatement(dataTable, tableName);
-                    SqlCommand createCmd = (SqlCommand)_dbConnection.CreateCommand();
-                    createCmd.CommandText = createSql;
-                    createCmd.ExecuteNonQuery();
-                }
-            }
-            catch (SqlException ex)
-            {
-                _messageBuilder.Append("Sql Exception:" + ex.Message + ", Stack Trace:" + ex.StackTrace + " for tablename: " + tableName + " sql statement " + createSql + Environment.NewLine);
-                messageBox.Text = _messageBuilder.ToString();
-            }
-            catch (Exception ex2)
-            {
-                _messageBuilder.Append("Create Table Error:" + ex2.Message + ", Stack Trace:" + ex2.StackTrace + " for tablename: " + tableName + " sql statement " + createSql + Environment.NewLine);
-                messageBox.Text = _messageBuilder.ToString();
-            }
-            conn.Close();
+        //private void CreateSqlServerDestinationTable(DataTable dataTable, string connString, string tableName)
+        //{
+        //    var conn = _dbConnection;
+        //    //lbMessages.Items.Add("Create table Started for Table: {dataTable.TableName}");
+        //    _messageBuilder.Append($"Create table Started for Table: {tableName}" + Environment.NewLine);
+        //    messageBox.Text = _messageBuilder.ToString();
+        //    if (conn.State != ConnectionState.Open)
+        //    {
+        //        conn.ConnectionString =_newConnString;
+        //        conn.Open();
+        //    }
+        //    string createSql = "";
+        //    try
+        //    {
+        //        using (_dbConnection)
+        //        {
+        //            createSql = BuildSqlServerCreateStatement(dataTable, tableName);
+        //            SqlCommand createCmd = (SqlCommand)_dbConnection.CreateCommand();
+        //            createCmd.CommandText = createSql;
+        //            createCmd.ExecuteNonQuery();
+        //        }
+        //    }
+        //    catch (SqlException ex)
+        //    {
+        //        _messageBuilder.Append("Sql Exception:" + ex.Message + ", Stack Trace:" + ex.StackTrace + " for tablename: " + tableName + " sql statement " + createSql + Environment.NewLine);
+        //        messageBox.Text = _messageBuilder.ToString();
+        //    }
+        //    catch (Exception ex2)
+        //    {
+        //        _messageBuilder.Append("Create Table Error:" + ex2.Message + ", Stack Trace:" + ex2.StackTrace + " for tablename: " + tableName + " sql statement " + createSql + Environment.NewLine);
+        //        messageBox.Text = _messageBuilder.ToString();
+        //    }
+        //    conn.Close();
 
-            _messageBuilder.Append($"Table {tableName} created successfully." + Environment.NewLine);
-            messageBox.Text = _messageBuilder.ToString();
-        }
+        //    _messageBuilder.Append($"Table {tableName} created successfully." + Environment.NewLine);
+        //    messageBox.Text = _messageBuilder.ToString();
+        //}
 
-        private static string BuildSqlServerCreateStatement(DataTable dataTable, string tableName)
-        {
+        //private static string BuildSqlServerCreateStatement(DataTable dataTable, string tableName)
+        //{
 
-            int i = 1;
-            string sqlColumnCreate = "";
-            foreach (var row in dataTable.AsEnumerable().OrderBy(x => x.ItemArray[6]))
-            {
-                var columnName = row[3].ToString();
-                var dataTypeString = row[11].ToString();
-                var maxLength = row[13].ToString();
-                var precision = row[15].ToString();
-                var dataType = GetSqlServerDataType(dataTypeString, maxLength, precision);
+        //    int i = 1;
+        //    string sqlColumnCreate = "";
+        //    foreach (var row in dataTable.AsEnumerable().OrderBy(x => x.ItemArray[6]))
+        //    {
+        //        var columnName = row[3].ToString();
+        //        var dataTypeString = row[11].ToString();
+        //        var maxLength = row[13].ToString();
+        //        var precision = row[15].ToString();
+        //        var dataType = GetSqlServerDataType(dataTypeString, maxLength, precision);
 
-                if (_isAccess )
-                {
-                    columnName = columnName.Replace(" ", "_");
-                    tableName = tableName.Replace(" ", "_");
-                }
+        //        if (_isAccess )
+        //        {
+        //            columnName = columnName.Replace(" ", "_");
+        //            tableName = tableName.Replace(" ", "_");
+        //        }
 
-                string primKey = "";
-                if (i == 1)
-                {
-                    sqlColumnCreate = "CREATE TABLE [" + tableName + "] ([" + columnName.ToString().Trim() + "] " + dataType + ", ";
-                }
-                else if (i == dataTable.Rows.Count)
-                    sqlColumnCreate = sqlColumnCreate + " [" + columnName.ToString().Trim() + "] " + dataType + "); ";
-                else
-                    sqlColumnCreate = sqlColumnCreate + " [" + columnName.ToString().Trim() + "] " + dataType + ", ";
-                i++;
-            }
-            return sqlColumnCreate;
-        }
-        private static string GetSqlServerDataType(string dataType, string maxLength, string precision = "0", int scale = 0)
-        {
-            //254 is the max length of a column on FoxPro
+        //        string primKey = "";
+        //        if (i == 1)
+        //        {
+        //            sqlColumnCreate = "CREATE TABLE [" + tableName + "] ([" + columnName.ToString().Trim() + "] " + dataType + ", ";
+        //        }
+        //        else if (i == dataTable.Rows.Count)
+        //            sqlColumnCreate = sqlColumnCreate + " [" + columnName.ToString().Trim() + "] " + dataType + "); ";
+        //        else
+        //            sqlColumnCreate = sqlColumnCreate + " [" + columnName.ToString().Trim() + "] " + dataType + ", ";
+        //        i++;
+        //    }
+        //    return sqlColumnCreate;
+        //}
+        //private static string GetSqlServerDataType(string dataType, string maxLength, string precision = "0", int scale = 0)
+        //{
+        //    //254 is the max length of a column on FoxPro
 
-            switch (dataType)
-            {
-                case "129":
-                    dataType = $"Varchar({maxLength})";
-                    break;
-                case "130":
-                    dataType = $"NVarchar(max)";
-                    break;
-                case "7":
-                case "133":
-                case "135":
-                    dataType = $"DateTime2";
-                    break;
+        //    switch (dataType)
+        //    {
+        //        case "129":
+        //            dataType = $"Varchar({maxLength})";
+        //            break;
+        //        case "130":
+        //            dataType = $"NVarchar(max)";
+        //            break;
+        //        case "7":
+        //        case "133":
+        //        case "135":
+        //            dataType = $"DateTime2";
+        //            break;
 
-                case "20":
-                    dataType = "Bigint";
-                    break;
-                case "128":
-                    dataType = "Varbinary";
-                    break;
-                case "11":
-                    dataType = "Bit";
-                    break;
-                case "8":
-                    maxLength = maxLength == String.Empty ? "65535" : maxLength;
+        //        case "20":
+        //            dataType = "Bigint";
+        //            break;
+        //        case "128":
+        //            dataType = "Varbinary";
+        //            break;
+        //        case "11":
+        //            dataType = "Bit";
+        //            break;
+        //        case "8":
+        //            maxLength = maxLength == String.Empty ? "65535" : maxLength;
 
-                    dataType = $"nvarchar({maxLength})";
-                    break;
+        //            dataType = $"nvarchar({maxLength})";
+        //            break;
 
-                    dataType = "decimal(19, 2)";
-                    break;
-                case "134":
-                    dataType = "Timestamp";
-                    break;
-                case "5":
-                case "6":
-                case "14":
-                case "131":
-                    precision = precision == String.Empty ? "19" : precision;
-                    dataType = $"Decimal({precision}, {scale})";
-                    break;
-                case "72":
-                    dataType = $"UniqueIdentifier";
-                    break;
-                default:
-                    dataType = "varchar(max)";
-                    break;
-            };
+        //            dataType = "decimal(19, 2)";
+        //            break;
+        //        case "134":
+        //            dataType = "Timestamp";
+        //            break;
+        //        case "5":
+        //        case "6":
+        //        case "14":
+        //        case "131":
+        //            precision = precision == String.Empty ? "19" : precision;
+        //            dataType = $"Decimal({precision}, {scale})";
+        //            break;
+        //        case "72":
+        //            dataType = $"UniqueIdentifier";
+        //            break;
+        //        default:
+        //            dataType = "varchar(max)";
+        //            break;
+        //    };
 
-            return dataType;
+        //    return dataType;
 
-        }
+        //}
 
         private void InsertData(OleDbDataReader dataReader, DataTable columns, string connString, string tableName)
         {
